@@ -1,0 +1,9 @@
+pip install tensorflow-hub
+pip install scipy
+pip install scikit-image
+pip install sympy
+pip install flask
+pip install matplotlib==3.0.3
+pip install numpy
+pip install tensorflow==1.7
+pip install opencv-python==3.4.0.12
