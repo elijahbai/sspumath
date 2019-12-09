@@ -13,8 +13,87 @@ import parserNew
 import tools
 from calculator import *
 import time
+import math
 import win32com.client as win
 speak = win.Dispatch("SAPI.SpVoice")
+
+def compare(op1, op2):
+    """
+    比较两个运算符的优先级,乘除运算优先级比加减高
+    op1优先级比op2高返回True，否则返回False
+    """
+    return op1 in ["*", "/", "^", "%"] and op2 in ["+", "-"]
+
+
+def getvalue(num1, num2, operator):
+    """
+    根据运算符号operator计算结果并返回
+    """
+    if operator == "+":
+        return num1 + num2
+    elif operator == "-":
+        return num1 - num2
+    elif operator == "*":
+        return num1 * num2
+    elif operator == "^":
+        return math.pow(num1, num2)
+    elif operator == "%":
+        return math.pow(num2, 1/num1)
+    elif operator == "~":
+        return math.log(num2,num1)
+    elif operator == "/":
+        return num1 / num2
+
+
+def process_new(data, opt):
+    """
+    opt出栈一个运算符，data出栈两个数值，进行一次计算，并将结果入栈data
+    """
+    operator = opt.pop()
+
+    num2 = data.pop()
+    num1 = data.pop()
+
+    data.append(getvalue(num1, num2, operator))
+    print(getvalue(num1, num2, operator))
+
+def equation(eq, var="x"):
+    r = eval(eq.replace('=', '-(')+')', {var: 1j})
+    return -r.real / r.imag
+
+def calculate_new(s):
+    """
+    计算字符串表达式的值,字符串中不包含空格
+    """
+    data = []  # 数据栈
+    opt = []  # 操作符栈
+    i = 0  # 表达式遍历索引
+    print(s,"s")
+    while i < len(s):
+        if s[i].isdigit():  # 数字，入栈data
+            start = i  # 数字字符开始位置
+            while i + 1 < len(s) and s[i + 1].isdigit():
+                i += 1
+            data.append(int(s[start: i + 1]))  # i为最后一个数字字符的位置
+        elif s[i] == ")":  # 右括号，opt出栈同时data出栈并计算，计算结果入栈data，直到opt出栈一个左括号
+            while opt[-1] != "(":
+                process_new(data, opt)
+            opt.pop()  # 出栈"("
+        elif not opt or opt[-1] == "(":  # 操作符栈为空，或者操作符栈顶为左括号，操作符直接入栈opt
+            opt.append(s[i])
+        elif s[i] == "(" or compare(s[i], opt[-1]):  # 当前操作符为左括号或者比栈顶操作符优先级高，操作符直接入栈opt
+            opt.append(s[i])
+        else:  # 优先级不比栈顶操作符高时，opt出栈同时data出栈并计算，计算结果如栈data
+            while opt and not compare(s[i], opt[-1]):
+                if opt[-1] == "(":  # 若遇到左括号，停止计算
+                    break
+                process_new(data, opt)
+            opt.append(s[i])
+        i += 1  # 遍历索引后移
+    while opt:
+        process_new(data, opt)
+    #print(data.pop())
+    return data.pop()
 
 
 # 程序入口,输入一张图片，输出一张图片
@@ -54,140 +133,86 @@ def solve(filename,mode = 'product'):
         # print(p['classes'],FILELIST[p['classes']])
         candidates = get_candidates(p['probabilities'])
         characters.append({'location':symbols[i]['location'],'candidates':candidates})
-    #print([x['location'] for x in characters])
+    print([x['location'] for x in characters])
 
     modify_characters(characters)
 
     # print('排序后的字符序列')
     # print([[x['location'], x['candidates']] for x in characters])
     tokens = process.group_into_tokens(characters)
-    # print('识别出的token')
-    # print(tokens)
-    # 先将每一个token初始化成一个树节点，得到一个节点列表node_list
-    node_list = parserNew.characters_to_nodes(characters)
-
-    parser_tree = parserNew.decompose(node_list)
-    # print(parser_tree)
-    set_forward_step(0)
-    post_order(parser_tree)
+    print('识别出的token')
+    print(tokens)
+    string_out = ""
+    #转换为string类型的序列
+    count_arrow = 0
+    i = 0
+    eq = False
+    while i < len(tokens):
+        if tokens[i]['token_string'] == 'f':
+            if i < 2:
+                tokens.insert(0,{'location': [39, 30, 118, 90], 'token_string': '(', 'token_type': 9})
+                tokens.insert(i + 3, {'location': [39, 30, 118, 90], 'token_string': ')', 'token_type': 9})
+            else:
+                tokens.insert(i - 1, {'location': [39, 30, 118, 90], 'token_string': '(', 'token_type': 9})
+                tokens.insert(i + 3, {'location': [39, 30, 118, 90], 'token_string': ')', 'token_type': 9})
+            i = i + 3
+        if tokens[i]['token_string'] == '=':
+            eq = True
+        i = i + 1
+    i = 0
+    while i < len(tokens):
+        #print(i,"")
+        string_temp = tokens[i]['token_string']
+        if string_temp =='f' and tokens[i]['token_type'] == 0:
+            string_temp = '/'
+        if string_temp == 'times' and tokens[i]['token_type'] == 0:
+            string_temp = '*'
+        if string_temp == 'x' and tokens[i]['token_type'] == 4:
+            string_temp = 'x'
+        if string_temp == 'log':
+            string_temp = tokens[i+1]['token_string']+'~'+tokens[i+2]['token_string']
+            string_out += str(string_temp)
+            i = i + 3
+            continue
+        if string_temp == 'sqrt' and tokens[i]['token_type'] == 0:
+            string_temp = '2%'
+        if string_temp == 'div' and tokens[i]['token_type'] == 0:
+            string_temp = '/'
+        if i>=1 and tokens[i-1]['token_type'] == 1 and tokens[i]['token_type'] == 1 :
+            string_temp = '^' + string_temp
+        if tokens[i]['token_type'] == 9 and string_temp == 'rightarrow' and count_arrow%2 == 0:
+            string_temp = '('
+            count_arrow +=1
+        if tokens[i]['token_type'] == 9 and string_temp == 'rightarrow' and count_arrow % 2 == 1:
+            string_temp = ')'
+            count_arrow += 1
+        i = i + 1
+        string_out += str(string_temp)
+    print(string_out, "string_out")
     y_start = 0.9
     y_stride = 0.2
-    if parser_tree['status'] == STATUS['solved']:
-        latex_strs = []
-        i = 5
-        j = 0
-
-        while j < i and isinstance(parser_tree['structure'], list):
-            set_forward_step(1)
-            latex_str = post_order(parser_tree)
-            latex_strs.append(latex_str)
-            j = j + 1
-        # for latex_str in latex_strs:
-        #     print(latex_str)
-        # print(parser_tree)
-
-        for i, latex_str in enumerate(latex_strs):
-            if i == 0:
-                expression_str = r'$expression:' + latex_str + '$'
-            else:
-                expression_str = r'$step' + str(i) + ':' + latex_str + '$'
-            # print(expression_str)
-            font_size = 18
-            if len(latex_str) > 12:
-                font_size = 15
-            plt.text(0.1, y_start, expression_str, fontsize=font_size)
-            y_start = y_start - y_stride
-        latex_str = latex_strs[0]
+    speak.Speak(string_out)
+    if eq:
+        result1 = equation(string_out)
     else:
-        set_forward_step(0)
-        latex_str = post_order(parser_tree)
-        expression_str = r'$expression:' + latex_str + '$'
-        font_size = 18
-        if len(latex_str) > 12:
-            font_size=15
-        plt.text(0.1, y_start, expression_str, fontsize=font_size)
-        y_start = y_start - y_stride
-
-    # print(solve_expression(parser_tree))
-    solution = ''
-    answer=''
-    if parser_tree['status'] == STATUS['solved']:
-        # print(latex(parser_tree['value']))
-        if isinstance(parser_tree['value'], int) or isinstance(parser_tree['value'], float):
-            solution = r'$result:' + str(parser_tree['value']) + '$'
-            answer = str(parser_tree['value'])
-
-        else:
-            solution = r'$result:' + str(latex(parser_tree['value'])) + '$'
-            answer = str(latex(parser_tree['value']))
-
-    elif parser_tree['type'] == NODE_TYPE['derivation'] or parser_tree['type'] == NODE_TYPE['limitation']:
-        solution = r'$result:' + str(latex(parser_tree['value'])) + '$'
-        answer = str(latex(parser_tree['value']))
-
-    elif parser_tree['status'] == STATUS['eq1'] or parser_tree['status'] == STATUS['eq2']:
-
-        result = solve_expression(parser_tree)
-        # print(result)
-        solution = r'$result:' + result_to_str(result) + '$'
-        answer = result
-
-    elif parser_tree['status'] == STATUS['other']:
-        answer = latex(parser_tree['value'])
-        # print(answer)
-    else:
-        result = solve_expression(parser_tree)
-
-        # print(str(result))
-        solution = r'$solution:' + latex_str + '$'
-    speak.Speak(latex_str)
-    speak.Speak(answer)
-    print('答案：',solution)
+        result1 = (calculate_new(string_out))
+    solution = r'$solution:' + str(result1) + '$'
+    speak.Speak("答案是")
+    speak.Speak(result1)
+    print('答案：', solution)
     print('处理结果请到static文件夹下的最新生成的图片查看')
     plt.text(0.1, y_start, solution, fontsize=18)
-
-    #
-    # expression_str = r'$expression:' + latex_str + '$'
-    # print(expression_str)
-    # plt.text(0.1, 0.9, expression_str, fontsize=20)
-    # # print(solve_expression(parser_tree))
-    # solution = ''
-    # answer =''
-    # if parser_tree['status'] == STATUS['solved']:
-    #     if isinstance(parser_tree['value'], int) or isinstance(parser_tree['value'], float):
-    #         solution = r'$result:' + str(parser_tree['value']) + '$'
-    #         answer = str(parser_tree['value'])
-    #     else:
-    #         solution = r'$result:' + str(latex(parser_tree['value'])) + '$'
-    #         answer = str(latex(parser_tree['value']))
-    #
-    #
-    # elif parser_tree['status'] == STATUS['eq1'] or parser_tree['status'] == STATUS['eq2']:
-    #     solution = r'$result:' + str(latex(parser_tree['value'])) + '$'
-    #     result = solve_expression(parser_tree)
-    #     print(result)
-    #     answer = result
-    # elif parser_tree['status'] == STATUS['other']:
-    #     answer = latex(parser_tree['value'])
-    #     print(answer)
-    # else:
-    #     solution = r'$solution:' + latex_str + '$'
-    #     answer = latex_str
-    # plt.text(0.1, 0.5, solution, fontsize=20)
-
-
-
-    plt.xticks([]),plt.yticks([])
+    plt.xticks([]), plt.yticks([])
     # print(filename.rsplit('.',1)[1])
     save_filename = str(int(time.time()))
-    save_filename_dir = SAVE_FOLDER+save_filename
+    save_filename_dir = SAVE_FOLDER + save_filename
     plt.savefig(save_filename_dir)
     # plt.show()
     plt.close()
     if mode == 'product':
         return save_filename
     elif mode == 'test':
-        return latex_str,answer
+        return latex_str, answer
 
 
 

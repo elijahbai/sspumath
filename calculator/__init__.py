@@ -84,7 +84,6 @@ def post_order(node):
     latex_str = ''
     # 若该节点不空
     if isinstance(node, dict) and len(node):
-
         child  = node['structure']
         # 对于任意一个非叶节点，都是先遍历其子节点，再遍历该节点
         # 对于任意一个叶节点，直接根据节点类型确定其节点状态status和值value
@@ -197,7 +196,6 @@ def post_order(node):
                 node['flag'] = 0
             # print(node['value'])
         elif node['type']==NODE_TYPE['t']:
-            # print('post_order t',child[0])
             f = post_order(child[0])
             node['status'] = child[0]['status']
             node['value'] = child[0]['value']
@@ -274,7 +272,8 @@ def post_order(node):
                 node['flag'] = 0
             # print(node['value'])
         elif node['type'] == NODE_TYPE['e']:
-            # print('post_order e')
+            print('post_order e')
+            print(post_order)
             t = post_order(child[0])
             node['status'] = child[0]['status']
             node['value'] = child[0]['value']
